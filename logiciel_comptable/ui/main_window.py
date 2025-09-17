@@ -1,8 +1,22 @@
 """Main application window containing navigation between modules."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QMainWindow, QPushButton, QVBoxLayout, QWidget
+from typing import Dict
+
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QStackedWidget,
+    QStyle,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ui.clients_ui import ClientsWidget
 from ui.factures_ui import FacturesWidget
@@ -15,82 +29,173 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Mini logiciel comptable")
-        self.resize(800, 600)
+        self.resize(1040, 680)
 
-        self._clients_window: ClientsWidget | None = None
-        self._factures_window: FacturesWidget | None = None
-        self._ecritures_window: EcrituresWidget | None = None
+        self._stacked_widget: QStackedWidget | None = None
+        self._module_title: QLabel | None = None
+        self._nav_buttons: Dict[str, QPushButton] = {}
+
+        self._clients_widget = ClientsWidget()
+        self._factures_widget = FacturesWidget()
+        self._ecritures_widget = EcrituresWidget()
 
         self._setup_ui()
+        self._set_active_module("factures")
 
     # ------------------------------------------------------------------
     def _setup_ui(self) -> None:
         central_widget = QWidget()
-        layout = QVBoxLayout(central_widget)
-        layout.setSpacing(20)
+        root_layout = QHBoxLayout(central_widget)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
 
-        title = QLabel("Bienvenue dans le mini logiciel comptable")
-        title.setStyleSheet("font-size: 20px; font-weight: bold;")
-        title.setAlignment(Qt.AlignCenter)
+        sidebar = self._create_sidebar()
+        content = self._create_content_area()
 
-        subtitle = QLabel(
-            "Choisissez un module pour commencer à gérer vos données comptables."
-        )
-        subtitle.setWordWrap(True)
-        subtitle.setAlignment(Qt.AlignCenter)
-
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
-
-        clients_button = QPushButton("Gestion des clients")
-        factures_button = QPushButton("Gestion des factures")
-        ecritures_button = QPushButton("Journal comptable")
-
-        clients_button.setMinimumHeight(40)
-        factures_button.setMinimumHeight(40)
-        ecritures_button.setMinimumHeight(40)
-
-        layout.addWidget(clients_button)
-        layout.addWidget(factures_button)
-        layout.addWidget(ecritures_button)
-        layout.addStretch()
-
-        clients_button.clicked.connect(self.open_clients_module)
-        factures_button.clicked.connect(self.open_factures_module)
-        ecritures_button.clicked.connect(self.open_ecritures_module)
+        root_layout.addWidget(sidebar)
+        root_layout.addWidget(content, 1)
 
         self.setCentralWidget(central_widget)
 
     # ------------------------------------------------------------------
-    def _ensure_clients_window(self) -> ClientsWidget:
-        if self._clients_window is None:
-            self._clients_window = ClientsWidget()
-        return self._clients_window
+    def _create_sidebar(self) -> QWidget:
+        sidebar = QFrame()
+        sidebar.setObjectName("sidebar")
+        sidebar.setFixedWidth(220)
+        sidebar.setStyleSheet(
+            """
+            #sidebar {
+                background-color: #f2f2f7;
+                border-right: 1px solid #dcdde1;
+            }
+            """
+        )
 
-    def _ensure_factures_window(self) -> FacturesWidget:
-        if self._factures_window is None:
-            self._factures_window = FacturesWidget()
-        return self._factures_window
+        layout = QVBoxLayout(sidebar)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(18)
 
-    def _ensure_ecritures_window(self) -> EcrituresWidget:
-        if self._ecritures_window is None:
-            self._ecritures_window = EcrituresWidget()
-        return self._ecritures_window
+        logo = QLabel("Mini logiciel\ncomptable")
+        logo.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        logo.setStyleSheet("font-size: 18px; font-weight: 600; color: #1f1f24;")
+        layout.addWidget(logo)
 
-    def open_clients_module(self) -> None:
-        window = self._ensure_clients_window()
-        window.show()
-        window.raise_()
-        window.activateWindow()
+        layout.addSpacing(12)
 
-    def open_factures_module(self) -> None:
-        window = self._ensure_factures_window()
-        window.show()
-        window.raise_()
-        window.activateWindow()
+        self._nav_buttons["clients"] = self._create_nav_button(
+            "Clients", self.style().standardIcon(QStyle.SP_FileIcon)
+        )
+        self._nav_buttons["factures"] = self._create_nav_button(
+            "Factures", self.style().standardIcon(QStyle.SP_DriveHDIcon)
+        )
+        self._nav_buttons["ecritures"] = self._create_nav_button(
+            "Comptabilité", self.style().standardIcon(QStyle.SP_ComputerIcon)
+        )
+        self._nav_buttons["quit"] = self._create_nav_button(
+            "Quitter", self.style().standardIcon(QStyle.SP_DialogCloseButton)
+        )
 
-    def open_ecritures_module(self) -> None:
-        window = self._ensure_ecritures_window()
-        window.show()
-        window.raise_()
-        window.activateWindow()
+        for key in ("clients", "factures", "ecritures"):
+            layout.addWidget(self._nav_buttons[key])
+
+        layout.addStretch(1)
+        layout.addWidget(self._nav_buttons["quit"])
+
+        self._nav_buttons["clients"].clicked.connect(
+            lambda: self._set_active_module("clients")
+        )
+        self._nav_buttons["factures"].clicked.connect(
+            lambda: self._set_active_module("factures")
+        )
+        self._nav_buttons["ecritures"].clicked.connect(
+            lambda: self._set_active_module("ecritures")
+        )
+        self._nav_buttons["quit"].clicked.connect(self._quit_application)
+
+        return sidebar
+
+    def _create_nav_button(self, text: str, icon: QIcon) -> QPushButton:
+        button = QPushButton(text)
+        button.setCheckable(True)
+        button.setIcon(icon)
+        button.setIconSize(QSize(22, 22))
+        button.setCursor(Qt.PointingHandCursor)
+        button.setMinimumHeight(42)
+        button.setStyleSheet(
+            """
+            QPushButton {
+                text-align: left;
+                padding: 10px 14px;
+                border-radius: 10px;
+                font-size: 15px;
+                color: #2f2f35;
+                background-color: transparent;
+            }
+            QPushButton:hover {
+                background-color: rgba(52, 120, 246, 0.08);
+            }
+            QPushButton:checked {
+                background-color: #3478f6;
+                color: white;
+            }
+            QPushButton:checked:hover {
+                background-color: #2967d1;
+            }
+            """
+        )
+        return button
+
+    # ------------------------------------------------------------------
+    def _create_content_area(self) -> QWidget:
+        container = QWidget()
+        container.setObjectName("contentArea")
+        container.setStyleSheet(
+            "#contentArea { background-color: white; }"
+        )
+
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(32, 24, 32, 32)
+        layout.setSpacing(18)
+
+        title = QLabel("Mini logiciel comptable")
+        title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        title.setStyleSheet("font-size: 24px; font-weight: 600; color: #1c1c21;")
+        layout.addWidget(title)
+
+        self._module_title = QLabel()
+        self._module_title.setStyleSheet(
+            "font-size: 19px; font-weight: 600; color: #2b2b30;"
+        )
+        layout.addWidget(self._module_title)
+
+        self._stacked_widget = QStackedWidget()
+        self._stacked_widget.addWidget(self._factures_widget)
+        self._stacked_widget.addWidget(self._clients_widget)
+        self._stacked_widget.addWidget(self._ecritures_widget)
+        layout.addWidget(self._stacked_widget, 1)
+
+        return container
+
+    # ------------------------------------------------------------------
+    def _set_active_module(self, module: str) -> None:
+        if not self._stacked_widget or not self._module_title:
+            return
+
+        mapping = {
+            "factures": (self._factures_widget, "Factures"),
+            "clients": (self._clients_widget, "Clients"),
+            "ecritures": (self._ecritures_widget, "Comptabilité"),
+        }
+
+        widget, title = mapping.get(module, (self._factures_widget, "Factures"))
+        self._stacked_widget.setCurrentWidget(widget)
+        self._module_title.setText(title)
+
+        for key, button in self._nav_buttons.items():
+            button.setChecked(key == module)
+
+    # ------------------------------------------------------------------
+    def _quit_application(self) -> None:
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()

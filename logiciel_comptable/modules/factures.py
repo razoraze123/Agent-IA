@@ -15,6 +15,7 @@ def create_invoice(
     date_facture: str,
     montant_ht: float,
     taux_tva: float,
+    statut: str = STATUT_EN_ATTENTE,
 ) -> int:
     """Create a new invoice and return its identifier."""
 
@@ -24,7 +25,7 @@ def create_invoice(
         INSERT INTO factures (client_id, date_facture, montant_ht, taux_tva, montant_ttc, statut)
         VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (client_id, date_facture, montant_ht, taux_tva, montant_ttc, STATUT_EN_ATTENTE),
+        (client_id, date_facture, montant_ht, taux_tva, montant_ttc, statut),
         commit=True,
     )
     return cursor.lastrowid
@@ -36,6 +37,43 @@ def update_invoice_status(invoice_id: int, statut: str) -> None:
     db_manager.execute(
         "UPDATE factures SET statut = ? WHERE id = ?",
         (statut, invoice_id),
+        commit=True,
+    )
+
+
+def update_invoice(
+    invoice_id: int,
+    client_id: int,
+    date_facture: str,
+    montant_ht: float,
+    taux_tva: float,
+    statut: str,
+) -> None:
+    """Update every field of an invoice."""
+
+    montant_ttc = montant_ht * (1 + taux_tva / 100)
+    db_manager.execute(
+        """
+        UPDATE factures
+           SET client_id = ?,
+               date_facture = ?,
+               montant_ht = ?,
+               taux_tva = ?,
+               montant_ttc = ?,
+               statut = ?
+         WHERE id = ?
+        """,
+        (client_id, date_facture, montant_ht, taux_tva, montant_ttc, statut, invoice_id),
+        commit=True,
+    )
+
+
+def delete_invoice(invoice_id: int) -> None:
+    """Remove an invoice from the database."""
+
+    db_manager.execute(
+        "DELETE FROM factures WHERE id = ?",
+        (invoice_id,),
         commit=True,
     )
 
